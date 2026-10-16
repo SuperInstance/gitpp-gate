@@ -38,14 +38,22 @@ export function classQuestion() {
   };
 }
 
-/** Is the proposed parent actually the current setter? */
-export function parentQuestion(currentSetter, proposedId) {
-  return {
-    parent_is_current_setter: {
-      type: "noul",
-      instructions: `The record that currently sets this key is "${currentSetter}". The proposed nudge names "${proposedId}" as its parent and therefore depends on that record remaining the setter. The parent choice is correct.`,
-    },
-  };
+/**
+ * Is the proposed parent actually the current setter?
+ *
+ * NOT a model question. proposeNudge() computes the parent FROM
+ * folded.setters[key], so the prompt would contain its own answer. The
+ * measured "0.61 correct vs 0.15 wrong" was not separation -- it was the
+ * model misreading a fact the caller already knew exactly.
+ *
+ * The scout was right that this inverts the gate: a decidable predicate
+ * held the only blocking authority, while the genuinely underdetermined
+ * question (should_apply) was barred from blocking. The decisive check is
+ * a string comparison, free and offline.
+ */
+export function parentIsCorrect(folded, key, record) {
+  const expected = folded?.setters?.[key] ?? null;
+  return { ok: record?.parents?.[0] === expected, expected, actual: record?.parents?.[0] ?? null };
 }
 
 /** Should this nudge land at all? */
@@ -63,7 +71,9 @@ export function intentQuestion() {
 export function route(answers, opts = {}) {
   const t = opts.threshold ?? DEFAULT_THRESHOLD;
   const applyP = probOf(answers?.should_apply);
-  const parentP = probOf(answers?.parent_is_current_setter);
+  // The parent gate is a COMPARISON, not a probability. 1 or 0.
+  const parentOk = opts.parentOk ?? null;
+  const parentP = parentOk === null ? null : (parentOk ? 1 : 0);
   const conflicts = [];
 
   // FAIL CLOSED. A gate that cannot answer must never be read as consent.
@@ -73,7 +83,7 @@ export function route(answers, opts = {}) {
   if (applyP === null || parentP === null) {
     const missing = [];
     if (applyP === null) missing.push("should_apply");
-    if (parentP === null) missing.push("parent_is_current_setter");
+    if (parentP === null) missing.push("parentCheck");
     return {
       action: opts.onMissing ?? "block",
       reason: `no signal from: ${missing.join(", ")}`,
@@ -82,14 +92,21 @@ export function route(answers, opts = {}) {
     };
   }
 
-  // Disqualifying, each with its own bar. See PARENT_BLOCK_BELOW.
-  const pb = opts.parentBlockBelow ?? PARENT_BLOCK_BELOW;
+  // The parent gate is EXACT. A comparison against folded.setters[key] has one
+  // meaningful answer, so a mismatch is a hard block with no threshold and no
+  // model call. This replaces a noul question whose prompt contained its own
+  // answer, where the measured "0.61 vs 0.15" was the model misreading a
+  // known fact rather than any kind of separation.
+  if (parentOk === false) {
+    conflicts.push(`parent ${opts.parentActual ?? "?"} is not the setter ${opts.parentExpected ?? "?"}`);
+  }
   // The intent gate does NOT block on its own. Measured on a two-record
   // synthetic state: a well-founded nudge scored 0.35 and an unjustified one
-  // 0.07. That is real separation but the wrong scale, and a fixed cutoff
-  // would block legitimate work. It routes to review instead. The parent
-  // gate, which separates 0.62 from 0.15, is the one allowed to block.
-  if (parentP !== null && parentP < pb) conflicts.push(`parent_is_current_setter=${parentP.toFixed(3)}`);
+  // 0.07. Real separation, wrong scale -- any cutoff admitting the bad case
+  // also blocks the good one. It routes to review. Its calibration on real
+  // record sets is the open question, and until it is calibrated it does not
+  // get blocking authority.
+
 
   if (conflicts.length) {
     return { action: "block", reason: `confidently no: ${conflicts.join(", ")}`, apply: applyP, parent: parentP };
@@ -97,9 +114,6 @@ export function route(answers, opts = {}) {
   // Weak intent signal on thin state is a review trigger, never a block.
   if (applyP !== null && applyP < t) {
     return { action: "review", reason: `should_apply=${applyP.toFixed(3)} below ${t}`, apply: applyP, parent: parentP };
-  }
-  if (parentP !== null && parentP < t) {
-    return { action: "review", reason: `parent confidence=${parentP.toFixed(3)} below ${t}`, apply: applyP, parent: parentP };
   }
   return { action: "act", reason: "all gates confident", apply: applyP, parent: parentP };
 }

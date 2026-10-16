@@ -15,10 +15,21 @@ Neither answers the prior question: **should this nudge happen at all?** A nudge
 
 Before applying, the gate asks [TypeSafe's Jev](https://docs.typesafe.ai) two narrow questions and routes on the answer:
 
-| Question | Type | Meaning |
+| Gate | Kind | Meaning |
 |---|---|---|
-| `should_apply` | noul | is this a well-founded update, given the current state? |
-| `parent_is_current_setter` | noul | is the record we are parenting on still the setter? |
+| `parentIsCorrect()` | **comparison** | is `record.parents[0] === folded.setters[key]`? |
+| `should_apply` | noul (Jev) | is this a well-founded update, given the current state? |
+
+**The parent gate is not a model question.** An earlier draft asked Jev
+`parent_is_current_setter`, but `proposeNudge()` computes the parent *from*
+`folded.setters[key]` — so the prompt contained its own answer. The measured
+"0.61 correct vs 0.15 wrong" was not separation; it was the model misreading a
+fact the caller already knew exactly.
+
+That inverted the whole gate. A decidable predicate held the only blocking
+authority while the genuinely underdetermined question was barred from
+blocking. Now the parent check is a string comparison — exact, free, offline —
+and it is the one allowed to block.
 
 Then **code** — not the model — decides:
 
@@ -36,11 +47,14 @@ only whether the decision the code already wants to make is safe.
 
 Real calls against Jev, on a two-record synthetic state:
 
-| case | `should_apply` | `parent_is_current_setter` | routed |
+| case | `should_apply` | parent check | routed |
 |---|---|---|---|
-| well-founded nudge, correct parent | **0.35** | **0.61** | `review` |
-| unjustified nudge ("no idea") | **0.07** | — | `review` |
-| nudge parented on the wrong record | — | **0.15** | `block` |
+| well-founded nudge, correct parent | **0.38** | exact ✓ | `review` |
+| unjustified nudge ("no idea") | **0.07** | exact ✓ | `review` |
+| nudge parented on the wrong record | — | **exact ✗** | `block` |
+
+The third row now blocks **with no model call at all** and names the reason:
+`parent t1 is not the setter t2`.
 
 Two things fall out of this, and both are in the design:
 
