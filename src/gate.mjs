@@ -115,7 +115,55 @@ export function route(answers, opts = {}) {
   if (applyP !== null && applyP < t) {
     return { action: "review", reason: `should_apply=${applyP.toFixed(3)} below ${t}`, apply: applyP, parent: parentP };
   }
-  return { action: "act", reason: "all gates confident", apply: applyP, parent: parentP };
+
+  // THE EFFECTS HALF.
+  //
+  // Everything above asks about the ACTION. Nothing above asks about
+  // what the action TOUCHES. Two actions can score identically on the
+  // intent gate and belong to different worlds: one lands on a cell we
+  // are certain of, the other on a cell that is contested and whose
+  // winner we are only 37% sure of.
+  //
+  // `cellConfidence` is the confidence of the weakest cell the action
+  // would touch, as produced by gitpp-sheet. It is optional: without it
+  // the gate behaves exactly as before, because a gate that cannot see
+  // an effect must not invent one.
+  //
+  // The policy is deliberately counter-intuitive in one place: an
+  // action touching a FRAGILE cell needs a HIGHER score, not a lower
+  // one. Applying an action to a cell you are unsure about is exactly
+  // when you want the action to be well justified.
+  if (opts.cellConfidence !== undefined && opts.cellConfidence !== null) {
+    const cellConf = opts.cellConfidence;
+    const bar = opts.fragileThreshold ?? 0.75;
+    if (cellConf < bar) {
+      // REVIEW, never block. The cell is uncertain, but that is a
+      // statement about the STATE, not a confident no about the
+      // action -- and this gate has no blocking authority on thin
+      // intent signal either, for the same reason.
+      return {
+        action: "review",
+        reason:
+          `the cell this action touches is only ${(cellConf * 100).toFixed(0)}% ` +
+          `confident, below ${(bar * 100).toFixed(0)}%; a well-founded action ` +
+          `on an uncertain cell needs a stronger justification`,
+        apply: applyP,
+        parent: parentP,
+        cellConfidence: cellConf,
+      };
+    }
+  }
+
+  return {
+    action: "act",
+    reason: opts.cellConfidence !== undefined && opts.cellConfidence !== null
+      ? `all gates confident; the cells it touches are ${(opts.cellConfidence * 100).toFixed(0)}% confident`
+      : "all gates confident",
+    apply: applyP,
+    parent: parentP,
+    ...(opts.cellConfidence !== undefined && opts.cellConfidence !== null
+        ? { cellConfidence: opts.cellConfidence } : {}),
+  };
 }
 
 function probOf(a) {

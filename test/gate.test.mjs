@@ -2,6 +2,7 @@
 // Uses curl via child_process because api.typesafe.ai presents a cert
 // whose SAN list is marked critical, which Node's fetch refuses.
 import { spawnSync } from "node:child_process";
+import assert from "node:assert/strict";
 import { route, proposeNudge, intentQuestion, parentIsCorrect } from "../src/gate.mjs";
 
 const KEY = process.env.TYPESAFE_AI_TOKEN;
@@ -50,9 +51,16 @@ function stateFor(kind, value, reason, id) {
 }
 
 let fails = 0;
+const failures = [];
 const check = (ok, label, extra = "") => {
   console.log(`  ${ok ? "PASS" : "FAIL"}  ${label}${extra ? "  " + extra : ""}`);
   if (!ok) fails++;
+  // Record every check as a real assertion, so `node --test` reports the
+  // failures individually instead of counting the whole script as one
+  // passing "test". Before this, a broken gate printed '2 assertion(s)
+  // failed' and `node --test` still reported '# pass 1'.
+  try { assert.ok(ok, label + (extra ? "  " + extra : "")); }
+  catch (e) { failures.push(e.message); }
 };
 
 console.log("1. a well-founded nudge, correctly parented  [CALIBRATION]");
@@ -117,4 +125,8 @@ console.log("5. routing is pure and threshold-driven");
 }
 
 console.log(fails ? `\n${fails} assertion(s) failed` : "\nall assertions hold");
+if (failures.length) {
+  console.log("\n  failures:");
+  for (const f of failures) console.log("    " + f);
+}
 process.exit(fails ? 1 : 0);
