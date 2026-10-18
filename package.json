@@ -4,8 +4,22 @@
   "description": "Confidence-gated nudging for the git.pp fold. Ask before you nudge; fail closed; log the decision as a record.",
   "type": "module",
   "main": "src/gate.mjs",
-  "scripts": { "test": "node test/gate.test.mjs" },
-  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node --test test/effects-gate.test.mjs",
+    "test:live": "node test/gate.test.mjs",
+    "test:all": "node --test test/effects-gate.test.mjs && node test/gate.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "license": "MIT",
-  "keywords": ["git.pp", "quilt", "fold", "nudge", "gate", "typesafe", "jev"]
+  "keywords": [
+    "git.pp",
+    "quilt",
+    "fold",
+    "nudge",
+    "gate",
+    "typesafe",
+    "jev"
+  ]
 }
