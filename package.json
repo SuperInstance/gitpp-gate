@@ -15,11 +15,31 @@
   "license": "MIT",
   "keywords": [
     "git.pp",
-    "quilt",
     "fold",
     "nudge",
+    "confidence",
     "gate",
-    "typesafe",
-    "jev"
-  ]
+    "fail-closed",
+    "provenance"
+  ],
+  "files": [
+    "src",
+    "README.md",
+    "JEV-CAPABILITY-MAP.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./src/gate.mjs",
+    "./jev": "./src/jev.mjs",
+    "./triggers": "./src/triggers.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SuperInstance/gp2.git"
+  },
+  "homepage": "https://github.com/SuperInstance/gp2#readme",
+  "bugs": {
+    "url": "https://github.com/SuperInstance/gp2/issues"
+  },
+  "author": "SuperInstance"
 }
