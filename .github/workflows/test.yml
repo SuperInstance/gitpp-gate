@@ -1,0 +1,46 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # The OFFLINE suite. No network, no secret, no flakiness.
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: run the offline suite
+        run: |
+          npm test 2>&1 | tee /tmp/out.txt
+          # The suite must actually RUN, not merely exit 0. A test
+          # harness that silently runs nothing is the same failure as
+          # one that compares against nothing.
+          grep -qE '^# pass [1-9][0-9]*$' /tmp/out.txt
+
+  # The LIVE suite, against the real judge.
+  #
+  # A SEPARATE job on purpose. The offline suite must not need the
+  # network, because a flaky third party must not be able to turn a
+  # real defect into a red build -- and a green offline suite must not
+  # be mistaken for evidence that the integration works.
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: unit
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: run the live suite
+        env:
+          TYPESAFE_AI_TOKEN: ${{ secrets.TYPESAFE_AI_TOKEN }}
+        run: npm run test:live
